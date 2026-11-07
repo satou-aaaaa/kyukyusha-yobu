@@ -57,7 +57,9 @@ const KEY = "kyukyusha-yobu-v1"; // gitleaks:allow 記録の名前（鍵では�
   check("正しい札が、いつもいちばん短い札にもならない（3000回で6割未満）", okShort.length / 3000 < 0.6, String(okShort.length));
   const allText = gen;
   check("医療の相談にしない（「必ず治る」「これで安心」などと言い切らない）", !/必ず治|絶対に大丈夫|これで安心|呼ばなくて大丈夫/.test(allText + html));
-  check("医療の相談ではなく、具合が悪いときは119番・迷ったら #7119 と、遊び方と「このゲームについて」に書く", (html.match(/医療の相談では/g) || []).length >= 2 && /迷わず119番/.test(html) && /#7119/.test(html));
+  const howSec = (html.match(/<dialog id="howto"[\s\S]*?<\/dialog>/) || [""])[0], aboutSec = (html.match(/function about\(\)[\s\S]*?\n}/) || [""])[0];
+  const both = (t) => /医療の相談では/.test(t) && /迷わず119番/.test(t) && /迷ったら #7119/.test(t);
+  check("医療の相談ではなく、具合が悪いときは迷わず119番・迷ったら #7119 と、遊び方と「このゲームについて」のそれぞれに書く", both(howSec) && both(aboutSec), `遊び方 ${both(howSec)}・このゲームについて ${both(aboutSec)}`);
   check("#7119 が無い地域もあることと、#8000・Q助を「このゲームについて」に書く", /まだ無い地域/.test(html) && /#8000/.test(html) && /Q助/.test(html));
   const FUNNY = ["（うそ）", "爆笑", "ツッコミ", "草生え", "ｗｗ"];
   check("お笑いの言葉を入れない（本物っぽさ優先）", !FUNNY.some((w) => (allText + html).includes(w)));
