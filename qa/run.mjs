@@ -15,6 +15,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const url = pathToFileURL(path.join(root, "index.html")).href;
 const results = [];
 const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail });
+const firstClose = async (q) => { if (await q.locator("#howto[open]").count()) await q.click("#howto-ok"); if (await q.locator("#core-coach").count()) { await q.evaluate(() => Core.coach.leave()); await q.waitForTimeout(100); } }; // はじめての練習の吹き出しをやめてホームへ（sync-template の migrateFirstQa が足した）
 createRequire(import.meta.url)(path.join(root, "gen.js"));
 const W = globalThis.KYUQ;
 const html = readFileSync(path.join(root, "index.html"), "utf8"), gen = readFileSync(path.join(root, "gen.js"), "utf8");
@@ -98,7 +99,7 @@ const newPage = async (w = 390, h = 800, init) => {
   await p.goto(url);
   return p;
 };
-const closeHow = (p) => p.evaluate(() => { const d = document.getElementById("howto"); if (d.open) document.getElementById("howto-ok").click(); });
+const closeHow = (p) => p.evaluate(() => { const d = document.getElementById("howto"); if (d.open) document.getElementById("howto-ok").click(); if (window.Core && Core.coach && Core.coach.active()) Core.coach.leave(); });
 const curOf = (p) => p.evaluate(() => { const c = window.__gw.cur(); return { okJ: c.ch.indexOf(c.q.ok), n: c.ch.length, t: c.q.t, tip: c.q.tip, ok: c.q.ok, ph: c.ph, m: c.m, hints: c.hints, mode: c.mode, i: c.i, bad: c.bad, out: c.out }; });
 const wrongJ = (c) => [...Array(c.n).keys()].find((j) => j !== c.okJ && !c.bad.includes(j) && !c.out.includes(j));
 async function answer(p) { const c = await curOf(p); await p.click(`[data-j="${c.okJ}"]`); return c; }
@@ -131,7 +132,7 @@ try {
   }
   { // 通しで遊ぶ：今日の5問
     const p = await newPage(390, 800, setDate("2026-11-10"));
-    check("はじめて開くと遊び方が出る", await p.evaluate(() => document.getElementById("howto").open));
+    check("はじめて開くと、遊び方の窓でなく吹き出しが出る", await p.evaluate(() => !document.getElementById("howto").open && !!document.getElementById("core-coach")));
     await closeHow(p);
     check("はじめての人も、今日・とことん・上級・救急帳・実績・カレンダーを全部押せる（鍵なし）", await p.evaluate(() => ["go-d", "go-e", "go-h", "go-dex", "go-ach", "go-cal"].every((id) => { const b = document.getElementById(id); return b && !b.disabled; })));
     await p.click("#go-d");
@@ -264,7 +265,7 @@ try {
   }
   { // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
     const sample = { [KEY]: JSON.stringify({ v: 1, tut: true, days: { "2026-11-07": { r: [{ m: 0, h: 0, t: 3 }] } }, hdays: {}, adays: {}, dex: { 3: 1 }, total: 1, ebest: 2, runs: {}, kofi: {}, ach: {}, t: 1 }) };
-    await checkTransfer({ browser, url, game: "kyukyusha-yobu", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); }); } });
+    await checkTransfer({ browser, url, game: "kyukyusha-yobu", sample, check, open: async (page) => { await page.evaluate(() => { const d = document.getElementById("howto"); if (d.open) d.close(); if (window.Core && Core.coach && Core.coach.active()) Core.coach.leave(); }); } });
   }
   // 保存できないとき：帯 #savewarn でちょうど1つ知らせ、2秒たっても残り、保存できるようになったら消える（2026-11-17。黙って記録が消えないように）
   {
@@ -272,12 +273,12 @@ try {
     await cw.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("full"); }; });
     const pw = await cw.newPage(); await pw.goto(url); await pw.waitForTimeout(300);
     const nW = () => pw.evaluate(() => document.querySelectorAll("#savewarn").length);
-    if (!(await pw.isVisible("#howto-ok"))) await pw.click("#f-how");
-    await pw.click("#howto-ok"); await pw.waitForTimeout(100);
+    if (!(await pw.isVisible("#howto-ok"))) await firstClose(pw).then(() => pw.click("#f-how"));
+    await firstClose(pw); await pw.waitForTimeout(100);
     const n1 = await nW(), txt = await pw.evaluate(() => (document.getElementById("savewarn") || {}).textContent || "");
     await pw.waitForTimeout(2000); const n2 = await nW();
     await pw.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
-    await pw.click("#f-how"); await pw.click("#howto-ok"); await pw.waitForTimeout(100); const n3 = await nW();
+    await firstClose(pw).then(() => pw.click("#f-how")); await firstClose(pw); await pw.waitForTimeout(100); const n3 = await nW();
     check("保存できないブラウザで遊ぶと、帯（#savewarn）でちょうど1つ知らせ、2秒たっても残る・保存できるようになったら消える", n1 === 1 && n2 === 1 && txt.includes("保存できませんでした") && n3 === 0, JSON.stringify([n1, n2, n3, txt]));
     await cw.close();
   }
